@@ -1,4 +1,3 @@
-#include "mainwindow.h"
 #include "musfile.h"
 
 #include <string>
@@ -8,6 +7,7 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QMainWindow>
 #include <QTextEdit>
 #include <QLabel>
 #include <QDebug>
@@ -42,7 +42,7 @@ extern std::map<QString, QString> standard_qtags;
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    MainWindow w;
+    QMainWindow w;
     w.setWindowTitle("Simple ID3 Tag Editor");
     QWidget* bigboss = new QWidget(&w);
     w.setCentralWidget(bigboss);

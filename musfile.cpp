@@ -33,7 +33,6 @@ vector<byte> MusFile::make_filebytes()
     // easily calculate the size of the ID3 header from these four bytes
     double id3_length = ret[6] * pow(2, 21) + ret[7] * pow(2, 14) +
         ret[8] * pow(2, 7) + ret[9] * (1);
-    // subtracting 10 from id3 removed.......I think that was the right thing to do lmao
     std::copy_n(infile, static_cast<__int64>(id3_length), std::back_inserter(ret));
     ++infile;
     filebytes.assign(infile, eof);  // assign remaining bytes to filebytes
