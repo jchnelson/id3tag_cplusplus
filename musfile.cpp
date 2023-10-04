@@ -52,6 +52,9 @@ vector<byte> MusFile::get_tag()
     return vector<byte>(filepos, filepos+tagsize+10);  // 
 }
 
+
+
+
 vector<vector<byte>> MusFile::maketags()
 {
     vector<vector<byte>> ret;
@@ -68,107 +71,9 @@ vector<vector<byte>> MusFile::maketags()
     return ret;
 }
 
-map<vector<byte>, vector<byte>> MusFile::make_tagmap()
-{
-    map<vector<byte>, vector<byte>> tagmap;
-    for (int i = 0; i != bintags.size(); ++i)
-    {
-        vector<byte> tagtype;
-        vector<byte> tag;
-        for (int j = 0; j != 4; ++j)
-            tagtype.push_back(bintags[i][j]);
-
-        /*
-        for (int j = 4; j != bintags[i].size(); ++j)
-        {
-            tag.push_back(bintags[i][j]);
-        }
-        tagmap.insert({ tagtype, tag });
-        */
-        for (int j = 10; j != bintags[i].size(); ++j)
-        {
-            if (bintags[i][j] == 1)
-            {
-                // 1 indicates UTF-16, FF FE for little endian
-                j += 2; // skip three bytes, two and then
-                continue; // this one
-            }
-            else if (bintags[i][j] == 255)
-            {
-                // stray byte order mark not at beginning of tag
-                j+= 1; // skip two bytes, one and then
-                continue; // this one
-            }
-            else if (bintags[i][j] == 0)
-                continue; // also skip zero padding
-            tag.push_back(bintags[i][j]);
-        }
-        tagmap.insert({ tagtype, tag });
-    }
-    return tagmap;
-}
-
-std::map<QString, QString> MusFile::make_qtags()
-{
-    map<QString, QString> qret;
-    for (const auto& elem : tagmap)
-    {
-        QString tagtype;
-        QString tag;
-        for (const auto& b: elem.first)
-        {  // QString doesn't like unsigned chars it seems
-            tagtype.append(static_cast<const char>(b));
-        }
-        for (const auto& b: elem.second)
-        {
-            tag.append(static_cast<const char>(b));
-        }
-        
-        qret.insert({ tagtype, tag });
-    }
-    return qret;
-}
 
 
-std::ostream& print_vecbyte(std::ostream& os, std::vector<byte> vb)
-{
-    for (const byte& b : vb)
-        os << b;
-    os << '\n';
-    for (const byte& b: vb)
-        os << static_cast<int>(b) << " ";
-    return os;
-}
 
-std::ostream& MusFile::print_tags(std::ostream& os) const
-{
-    for (const auto& elem : tagmap)
-    {
-        string tagtype;
-        for (int i = 0; i != elem.first.size(); ++i)
-            tagtype += elem.first[i];
-
-        string tagtext;
-        for (int i = 0; i != elem.second.size(); ++i)
-            if (isalnum(elem.second[i]) || isspace(elem.second[i]))
-                tagtext += elem.second[i];
-
-
-        os << std::left << std::setw(30) << std::setfill('-') << standard_tags.at(tagtype);
-        os << std::right << std::setw(50) << std::setfill('-') << tagtext << '\n';
-
-    }
-    return os;
-}
-
-void MusFile::reassemble()
-{
-    std::ofstream bob("output.mp3", std::ios_base::binary);
-    for (const auto& ch : tagbytes)
-        bob << ch;
-    for (const auto& ch : filebytes)
-        bob << ch;
-}
 
 std::vector<byte> MusFile::get_id3_size(int i)
 {  // id3 standard -- four bytes for header size, zeroed-out most significant
@@ -199,61 +104,45 @@ std::vector<byte> MusFile::get_id3_size(int i)
         // something most likely went wrong if the header is that large
 }
 
-void MusFile::change_tag(const string& tag, const string& newtag) 
+std::map<QString, QString> MusFile::make_qtags()
 {
-    auto tagloc = tagmap.find(std::vector<byte>(tag.begin(), tag.end()));
-    tagloc->second.clear();
-    
-    tagloc->second.push_back(0x00);
-    tagloc->second.push_back(0x00);
-    tagloc->second.push_back(0x00);
-    // I'm assuming I'm not writing a tag greater than 255 length for now,
-    // so three zeroed-out bytes for the first three ID3 frame size bytes
-
-    byte size = static_cast<byte>(newtag.size()) * 2 + 3; // characters and their nulls, and 
-                                       // unicode byte order mark
-    tagloc->second.push_back(size);
-
-    tagloc->second.push_back(0x00);  // the two flag bytes
-    tagloc->second.push_back(0x00);
-    
-    tagloc->second.push_back(0x01); // unicode byte order mark
-    tagloc->second.push_back(0xFF);
-    tagloc->second.push_back(0xFE);
-
-    for (const auto& ch : newtag)  // size bytes not inserted
+    // go straight from bintags, which is a vector of byte vectors,
+    // to qtags, a map of QString, QString pairs
+    map<QString, QString> tagmap;
+    for (int i = 0; i != bintags.size(); ++i)
     {
-        tagloc->second.push_back(ch);
-        tagloc->second.push_back(0x00);
-    }
-}
+        string tagtype(bintags[0].begin(), bintags[0].end());
+        string tag;
+        for (int j = 0; j != 4; ++j)
+            tagtype.push_back(bintags[i][j]);
+        
 
-bool MusFile::write_tags()
-{
-    std::ofstream bob("output.mp3", std::ios_base::binary);
-    bob << 'I' << 'D' << '3' << byte(0x03) << byte(0x00)
-        << byte(0x00);  // "ID3" and version bytes
-    // add up all the sizes of the tags and pass result to get_id3_size
-    int tagsum = 0;
-    for(const auto& p : tagmap)
-        tagsum+= static_cast<int>(p.first.size() + p.second.size());
-    auto sizebytes = get_id3_size(tagsum);
-    for (const auto& ch : sizebytes)
-        bob << ch;
-    for (const auto& p : tagmap)
-    {
-        for (const auto& ch : p.first)
-            bob << ch;
-        for (const auto& ch : p.second)
-            bob << ch;
+        for (int j = 10; j != bintags[i].size(); ++j)
+        {
+            if (bintags[i][j] == 1)
+            {
+                // 1 indicates UTF-16, FF FE for little endian
+                j += 2; // skip three bytes, two and then
+                continue; // this one
+            }
+            else if (bintags[i][j] == 255)
+            {
+                // stray byte order mark not at beginning of tag
+                j+= 1; // skip two bytes, one and then
+                continue; // this one
+            }
+            else if (bintags[i][j] == 0)
+                continue; // also skip zero padding
+            tag.push_back(bintags[i][j]);
+        }
+        tagmap.insert({ QString::fromStdString(tagtype),
+                        QString::fromStdString(tag) });
     }
-    for (const auto& ch : filebytes)
-        bob << ch;
-    for (int i = 0; i != 127; ++i)
-        bob << byte(0x00);
-    bob << byte(0xFF);
-    return true;
-}
+    return tagmap;
+    
+} 
+
+
 
 bool MusFile::write_qtags()
 {

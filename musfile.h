@@ -22,14 +22,8 @@ public:
         : filename(s) { }
     const std::vector<std::vector<byte>> 
          show_bintags() const { return bintags; }
-    const std::map<std::vector<byte>, std::vector<byte>>& 
-        show_tagmap() const { return tagmap; }
-    std::map<QString, QString>& show_qtags() { return QTags; }
-    std::ostream& print_tags(std::ostream&) const;
-    void reassemble();
-    void change_tag(const std::string&, const std::string&);
-    bool write_tags();
     bool write_qtags();
+    std::map<QString, QString> QTags = make_qtags();
 
 
 private:
@@ -41,11 +35,10 @@ private:
     std::vector<byte> get_tag(); 
     std::vector<std::vector<byte>> maketags();
     std::vector<std::vector<byte>> bintags = maketags();
-    std::map<std::vector<byte>, std::vector<byte>> make_tagmap();
-    std::map<std::vector<byte>, std::vector<byte>> tagmap = make_tagmap();
     std::vector<byte> get_id3_size(int);
     std::map<QString, QString> make_qtags();
-    std::map<QString, QString> QTags = make_qtags();
+    
+    
 };
 
 std::ostream& print_vecbyte(std::ostream& os, std::vector<MusFile::byte> vb);

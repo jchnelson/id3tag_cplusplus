@@ -29,7 +29,7 @@ void save_write_tags(MusFile& mp3,
     for (const auto& line : lines)
     {  
         if (!line.second->text().isEmpty())
-            mp3.show_qtags().at(line.first) = line.second->text();
+            mp3.QTags.at(line.first) = line.second->text();
     }
 
     bool success = mp3.write_qtags();
@@ -81,12 +81,12 @@ void do_folder(QWidget* central)
     QFormLayout* flayout = new QFormLayout(central);
     std::map<QString, QString> common_tags;
     
-    for (const auto& tag : musfolder[0].show_qtags())
+    for (const auto& tag : musfolder[0].QTags)
     {
         if (std::all_of(musfolder.begin(), musfolder.end(), [&tag] 
                 (MusFile& m)
-                { if (m.show_qtags().count(tag.first) != 0)
-                    return m.show_qtags().at(tag.first) == tag.second;
+                { if (m.QTags.count(tag.first) != 0)
+                    return m.QTags.at(tag.first) == tag.second;
                   else 
                     return false; } ) )
             common_tags.insert(tag);
@@ -125,7 +125,7 @@ void do_single_file(QWidget* central)
     
     
     
-    for (const auto& qs : mp3.show_qtags())
+    for (const auto& qs : mp3.QTags)
     {
         //qInfo() << qs.first << qs.second;
         QLineEdit* line = new QLineEdit();
