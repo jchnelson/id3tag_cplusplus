@@ -116,7 +116,7 @@ std::map<QString, QString> MusFile::make_qtags()
         QString tagtype;
         QString tag;
         for (const auto& b: elem.first)
-        {
+        {  // QString doesn't like unsigned chars it seems
             tagtype.append(static_cast<const char>(b));
         }
         for (const auto& b: elem.second)
