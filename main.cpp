@@ -41,14 +41,40 @@ void save_write_tags(MusFile& mp3,
     msgBox.exec();
 }
 
-std::vector<MusFile> initialize_folder()
+void save_write_folder(std::vector<MusFile>& musfolder, 
+                       std::map<QString, QLineEdit*>& lines,
+                       std::map<QString, QString>& commontags)
 {
-    // implement tag editing for a folder of mp3s... 
-    //  -- identify tags that are the same across all files
+    // extract text from each QLineEdit and save to qtags
+    for (const auto& line : lines)
+    {  
+        if (!line.second->text().isEmpty())
+            commontags.at(line.first) = line.second->text();
+    }
+    for (MusFile& mus : musfolder)
+        for (auto& tag : commontags)
+            mus.QTags.at(tag.first) = tag.second;
+    
+    bool success = all_of(musfolder.begin(), musfolder.end(),
+                          [&musfolder] (MusFile& mp3) 
+                           { return mp3.write_qtags(); } );
+    QMessageBox msgBox;
+    if (success)
+        msgBox.setText("Tags written successfully");
+    else
+        msgBox.setText("Operation Failed");
+    msgBox.exec();
+}
+
+void do_folder(QWidget* central)
+{
+    // implement tag editing for a folder of mp3s...  
+    //  -- identify tags that are the same across all files --done
     //  -- create sequence that holds these tags and iterate through
     //  it to create interface to allow editing them
     //  -- allow add/remove of tags
     //  -- write tags to files when clicked()
+    
     std::vector<MusFile> musfolder;
     QString opendir = QFileDialog::getExistingDirectory(0,
                      "Choose Folder of MP3s", "C:\\", QFileDialog::ShowDirsOnly);
@@ -57,23 +83,13 @@ std::vector<MusFile> initialize_folder()
     
     int current = 1;
     for (const auto& p : dirit)
-    {
-        
+    {      
         if (p.path().extension().string() == ".mp3")
         {
             musfolder.emplace_back(QString::fromStdString(p.path().string()));
             qInfo() << "Processing" << current++;
         }
-
-    }
-    
-    return musfolder;
-      
-}
-
-void do_folder(QWidget* central)
-{
-    std::vector<MusFile> musfolder = initialize_folder();
+    } 
     qInfo() << "musfolder size" << musfolder.size();
     if (musfolder.empty())
         throw std::runtime_error("No MP3s in Directory");
@@ -107,8 +123,9 @@ void do_folder(QWidget* central)
     QPushButton* goButton = new QPushButton("Save ID3 tags");
     flayout->addRow(goButton);
     
-    //QObject::connect(goButton, &QPushButton::clicked, 
-                     //[mp3, lines] () mutable { save_write_tags(mp3, lines); } );   
+    QObject::connect(goButton, &QPushButton::clicked, 
+                     [musfolder, lines, common_tags] () mutable 
+                     { save_write_folder(musfolder, lines, common_tags); } );   
 }
     
 
@@ -119,6 +136,7 @@ void do_single_file(QWidget* central)
     QString filename = QFileDialog::getOpenFileName(0,
         "Open MP3 File", "C:\\", "MP3 Files (*.mp3)");
     MusFile mp3(filename);
+    qInfo() << mp3.QTags.size();
     
     
     QFormLayout* flayout = new QFormLayout(central);

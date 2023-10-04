@@ -1,6 +1,5 @@
 #include <iostream>
 #include <ios>
-#include <iomanip>
 #include <fstream>
 #include <iterator>
 #include <algorithm>
@@ -10,20 +9,39 @@
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
+#include <filesystem>
+#include <QDebug>
+#include <QString>
 #include "musfile.h"
 
 typedef unsigned char byte;
+typedef std::chrono::milliseconds milli;
+typedef std::chrono::system_clock sclock;
+
+
 using std::vector;
 using std::string;
 using std::map;
+using std::chrono::duration_cast;
+
+void  print_millies(const sclock::time_point& s1, 
+                    const sclock::time_point& s2, QString message)
+{
+    auto millies = duration_cast<milli>(s2 - s1).count() / 1000.0;
+    qInfo() << message << millies << "s";
+}
+
+namespace fs = std::filesystem;
 
 extern std::map<std::string, std::string> standard_tags;
 
 vector<byte> MusFile::make_filebytes()
 {
-    std::ifstream mediafile{ filename.toStdString(), std::ios_base::binary};
+    std::ifstream mediafile{ filename.toStdString(), 
+                             std::ios_base::binary };
     noskipws(mediafile);
     std::istream_iterator<byte> infile{mediafile}, eof;
+    
     vector<byte> ret;
     std::copy_n(infile, 10, std::back_inserter(ret));
     ++infile;
@@ -31,14 +49,20 @@ vector<byte> MusFile::make_filebytes()
     // two version bytes, and one flag byte.  size bytes ignore most 
     // significant bit of each byte. this equation provided by ID3 standard to 
     // easily calculate the size of the ID3 header from these four bytes
-    double id3_length = ret[6] * pow(2, 21) + ret[7] * pow(2, 14) +
+    size_t id3_length = ret[6] * pow(2, 21) + ret[7] * pow(2, 14) +
         ret[8] * pow(2, 7) + ret[9] * (1);
-    std::copy_n(infile, static_cast<__int64>(id3_length), std::back_inserter(ret));
+    std::copy_n(infile, static_cast<__int64>(id3_length), 
+                        std::back_inserter(ret));
     ++infile;
-    filebytes.assign(infile, eof);  // assign remaining bytes to filebytes
-    auto fb = filebytes.end() - 128;  // set iterator to last 128 bytes
-    for (fb; fb != filebytes.end();)  // and zero those ID3v1 bytes out
-        fb = filebytes.erase(fb);
+    id3_orig = id3_length;
+    auto fsize = fs::file_size(fs::path(filename.toStdString()));
+    remaining_filesize = fsize - id3_length - 128;
+    //filebytes = infile;
+    // maybe store an iterator here instead of copying all the bytes,
+    // then use that iterator to copy when writing tags
+    //filebytes.reserve(filesize-id3_length);
+    //filebytes.assign(infile, eof);  // assign remaining bytes to filebytes
+    //filebytes.erase(filebytes.end()-128, filebytes.end()); // erase ID3v1 bytes
     return ret;
 }
 
@@ -49,7 +73,10 @@ vector<byte> MusFile::get_tag()
                        filepos[6] << 8  | filepos[7] );
     if (tagsize == 0)
         return vector<byte>();
-    return vector<byte>(filepos, filepos+tagsize+10);  // 
+    vector<byte> ret;
+    ret.reserve(tagsize+10);
+    ret.assign(filepos, filepos+tagsize+10);
+    return ret;
 }
 
 
@@ -65,6 +92,7 @@ vector<vector<byte>> MusFile::maketags()
         if (!next_tag.empty())
         { 
             filepos += next_tag.size();
+            ret.reserve(next_tag.size());
             ret.push_back(next_tag);
         }
     }
@@ -111,7 +139,7 @@ std::map<QString, QString> MusFile::make_qtags()
     map<QString, QString> tagmap;
     for (int i = 0; i != bintags.size(); ++i)
     {
-        string tagtype(bintags[0].begin(), bintags[0].end());
+        string tagtype;
         string tag;
         for (int j = 0; j != 4; ++j)
             tagtype.push_back(bintags[i][j]);
@@ -138,8 +166,7 @@ std::map<QString, QString> MusFile::make_qtags()
         tagmap.insert({ QString::fromStdString(tagtype),
                         QString::fromStdString(tag) });
     }
-    return tagmap;
-    
+    return tagmap;    
 } 
 
 
@@ -147,7 +174,12 @@ std::map<QString, QString> MusFile::make_qtags()
 bool MusFile::write_qtags()
 {
     // binary out bucket -- bob
-    std::ofstream bob("output.mp3", std::ios_base::binary);
+    auto mp3path = fs::path(filename.toStdString());
+    string outname = mp3path.filename().string();
+    string filedir = QTags.at("TALB").toStdString();
+    string outrel = filedir + "\\" + outname;
+    fs::create_directories(filedir);
+    std::ofstream bob(outrel, std::ios_base::binary);
     bob << 'I' << 'D' << '3' << byte(0x03) << byte(0x00)
         << byte(0x00); // "ID3" and version bytes
     // add up all the sizes of the tags and pass result to get_id3_size
@@ -189,8 +221,18 @@ bool MusFile::write_qtags()
         }
         
     }
-    for (const auto& ch : filebytes)
-        bob << ch;
+    std::ostream_iterator<byte> bob_it(bob);
+    
+    std::ifstream mediafile{ filename.toStdString(), 
+                             std::ios_base::binary };
+    noskipws(mediafile);
+    std::istream_iterator<byte> infile{mediafile};
+    std::advance(infile, id3_orig);
+    qInfo() << "advance okay";
+    std::copy_n(infile, remaining_filesize, bob_it);
+    qInfo() << "Copy with bob_it successful";
+    //for (const auto& ch : filebytes)
+        //bob << ch;
     for (int i = 0; i != 127; ++i)
         bob << byte(0x00);
     bob << byte(0xFF);

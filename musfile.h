@@ -22,13 +22,11 @@ public:
         : filename(s) { }
     const std::vector<std::vector<byte>> 
          show_bintags() const { return bintags; }
-    bool write_qtags();
-    std::map<QString, QString> QTags = make_qtags();
-
 
 private:
     QString filename;
-    std::vector<byte> filebytes;
+    size_t id3_orig;
+    uintmax_t remaining_filesize;
     std::vector<byte> make_filebytes();
     std::vector<byte> tagbytes = make_filebytes();
     std::vector<byte>::iterator filepos = tagbytes.begin() + 10;
@@ -37,7 +35,9 @@ private:
     std::vector<std::vector<byte>> bintags = maketags();
     std::vector<byte> get_id3_size(int);
     std::map<QString, QString> make_qtags();
-    
+public:  
+    std::map<QString, QString> QTags = make_qtags();
+    bool write_qtags();
     
 };
 
