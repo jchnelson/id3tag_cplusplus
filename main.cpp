@@ -87,10 +87,8 @@ void do_folder(QWidget* central)
         if (p.path().extension().string() == ".mp3")
         {
             musfolder.emplace_back(QString::fromStdString(p.path().string()));
-            qInfo() << "Processing" << current++;
         }
     } 
-    qInfo() << "musfolder size" << musfolder.size();
     if (musfolder.empty())
         throw std::runtime_error("No MP3s in Directory");
     
@@ -112,7 +110,6 @@ void do_folder(QWidget* central)
     
     for (const auto& qs : common_tags)
     {
-        //qInfo() << qs.first << qs.second;
         QLineEdit* line = new QLineEdit();
         line->setPlaceholderText(qs.second);
         line->setObjectName(qs.first);
@@ -136,7 +133,6 @@ void do_single_file(QWidget* central)
     QString filename = QFileDialog::getOpenFileName(0,
         "Open MP3 File", "C:\\", "MP3 Files (*.mp3)");
     MusFile mp3(filename);
-    qInfo() << mp3.QTags.size();
     
     
     QFormLayout* flayout = new QFormLayout(central);
@@ -145,7 +141,6 @@ void do_single_file(QWidget* central)
     
     for (const auto& qs : mp3.QTags)
     {
-        //qInfo() << qs.first << qs.second;
         QLineEdit* line = new QLineEdit();
         line->setPlaceholderText(qs.second);
         line->setObjectName(qs.first);
@@ -179,7 +174,6 @@ int main(int argc, char *argv[])
     initBox.addButton("Single mp3", QMessageBox::AcceptRole);
     initBox.addButton("Folder of Mp3s", QMessageBox::YesRole);
     int ret = initBox.exec();
-    qInfo() << ret;
     if (ret == 0) // accept
         do_single_file(bigboss);    
     else if (ret == 1) // yes
