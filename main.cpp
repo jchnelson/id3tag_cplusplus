@@ -10,6 +10,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QMainWindow>
+#include <QProgressBar>
 #include <QTextEdit>
 #include <QLabel>
 #include <QDebug>
@@ -43,7 +44,8 @@ void save_write_tags(MusFile& mp3,
 
 void save_write_folder(std::vector<MusFile>& musfolder, 
                        std::map<QString, QLineEdit*>& lines,
-                       std::map<QString, QString>& commontags)
+                       std::map<QString, QString>& commontags,
+                       QProgressBar* progbar)
 {
     // extract text from each QLineEdit and save to qtags
     for (const auto& line : lines)
@@ -56,11 +58,16 @@ void save_write_folder(std::vector<MusFile>& musfolder,
             mus.QTags.at(tag.first) = tag.second;
     
     bool success = all_of(musfolder.begin(), musfolder.end(),
-                          [&musfolder] (MusFile& mp3) 
-                           { return mp3.write_qtags(); } );
+                          [&musfolder, progbar] (MusFile& mp3) 
+                           {    progbar->setValue(progbar->value() + 1);
+                                QApplication::processEvents();
+                                return mp3.write_qtags(); } );
     QMessageBox msgBox;
     if (success)
+    {
+        progbar->setValue(progbar->maximum());
         msgBox.setText("Tags written successfully");
+    }
     else
         msgBox.setText("Operation Failed");
     msgBox.exec();
@@ -120,11 +127,16 @@ void do_folder(QWidget* central)
     QPushButton* goButton = new QPushButton("Save ID3 tags");
     flayout->addRow(goButton);
     
-    QObject::connect(goButton, &QPushButton::clicked, 
-                     [musfolder, lines, common_tags] () mutable 
-                     { save_write_folder(musfolder, lines, common_tags); } );   
-}
+    QProgressBar* folderprog = new QProgressBar();
+    folderprog->setMaximum(static_cast<int>(musfolder.size()));
+    folderprog->setMinimum(0);
     
+    
+    QObject::connect(goButton, &QPushButton::clicked, 
+                     [musfolder, lines, common_tags, flayout, folderprog] () mutable 
+                     { flayout->addRow(folderprog);
+                       save_write_folder(musfolder, lines, common_tags, folderprog); } );   
+}
 
 
 void do_single_file(QWidget* central)
@@ -134,10 +146,7 @@ void do_single_file(QWidget* central)
         "Open MP3 File", "C:\\", "MP3 Files (*.mp3)");
     MusFile mp3(filename);
     
-    
     QFormLayout* flayout = new QFormLayout(central);
-    
-    
     
     for (const auto& qs : mp3.QTags)
     {
@@ -154,10 +163,6 @@ void do_single_file(QWidget* central)
     QObject::connect(goButton, &QPushButton::clicked, 
                      [mp3, lines] () mutable { save_write_tags(mp3, lines); } );   
 }
-
-
-
-
 
 
 int main(int argc, char *argv[])
@@ -178,10 +183,6 @@ int main(int argc, char *argv[])
         do_single_file(bigboss);    
     else if (ret == 1) // yes
         do_folder(bigboss);
-    
-    
-
- 
 
     w.show();
     return a.exec();

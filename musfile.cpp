@@ -39,7 +39,6 @@ vector<byte> MusFile::make_filebytes()
         ret[8] * pow(2, 7) + ret[9] * (1);
     std::copy_n(infile, static_cast<__int64>(id3_length), 
                         std::back_inserter(ret));
-    ++infile;
     id3_orig = id3_length;
     auto fsize = fs::file_size(fs::path(filename.toStdString()));
     remaining_filesize = fsize - id3_length - 128;
@@ -108,7 +107,7 @@ std::vector<byte> MusFile::get_id3_size(int i)
     }
     else
         throw std::out_of_range("ID3 header too large");
-        // it could technically be larger (28 bits), but 
+        // it could technically be larger (28 significant bits), but 
         // something most likely went wrong if the header is that large
 }
 
@@ -153,64 +152,120 @@ std::map<QString, QString> MusFile::make_qtags()
 
 bool MusFile::write_qtags()
 {
-    // binary out bucket -- bob
-    auto mp3path = fs::path(filename.toStdString());
-    string outname = mp3path.filename().string();
-    string filedir = QTags.at("TALB").toStdString();
-    string outrel = filedir + "\\" + outname;
-    fs::create_directories(filedir);
-    std::ofstream bob(outrel, std::ios_base::binary);
-    bob << 'I' << 'D' << '3' << byte(0x03) << byte(0x00)
-        << byte(0x00); // "ID3" and version bytes
-    // add up all the sizes of the tags and pass result to get_id3_size
+    
     int tagsum = 0;
     for(const auto& p : QTags)
         tagsum+= static_cast<int>(10 + 3 + (p.second.size() * 2));
         // tag type (4) + ( tag length * 2(zeroes) ) + 3 (BOM) + 2 (flags) 
     // add back in zeroes and encoding-type byte + order mark (2 bytes)
-    auto sizebytes = get_id3_size(tagsum);
-    for (const auto& ch : sizebytes)
-        bob << ch;
-    for (const auto& p : QTags)
-    {
-        for (const auto& ch : p.first.toStdString())
-            bob << ch;
-        
-        // four size bytes
-        size_t size = (p.second.size() * 2) + 3;
-        if (size <= 255)
-        {
-            bob << byte(0x00)<< byte(0x00)<< byte(0x00);
-            bob << static_cast<byte>(size);
-        }
-        else if (size <= 65535)
-        {
-            bob << byte(0x00)<< byte(0x00);
-            bob << static_cast<byte>(size >> 8) << byte(0xFF);
-        }
-        else 
-            throw std::out_of_range("ID3 tag too big");
-            // again, if it's that big there's something wrong
-        
-        bob << byte(0x00) << byte(0x00); // two flag bytes
-        bob << byte(0x01) << byte(0xFF) << byte(0xFE);
-        for (const auto& ch : p.second.toStdString())
-        {
-            bob << ch;
-            bob << byte(0x00);
-        }    
-    }
-    std::ostream_iterator<byte> bob_it(bob);
     
-    std::ifstream mediafile{ filename.toStdString(), 
-                             std::ios_base::binary };
-    noskipws(mediafile);
-    std::istream_iterator<byte> infile{mediafile};
-    std::advance(infile, id3_orig);
-    std::copy_n(infile, remaining_filesize, bob_it);
+    
+    auto mp3path = fs::path(filename.toStdString());
+    string outname = mp3path.filename().string();
+    string filedir = QTags.at("TALB").toStdString();
+    string outrel = filedir + "\\" + outname;
+    fs::create_directories(filedir);
+    
+    if (id3_orig >= tagsum)
+    {
+        fs::copy(mp3path, outrel);
+        std::fstream biob(outrel, std::ios_base::binary
+                          | std::ios_base::out | std::ios_base::in);
+        biob.seekp(10, std::ios_base::beg);
+        
+        for (const auto& p : QTags)
+        {
+            for (const auto& ch : p.first.toStdString())
+                biob << ch;
+            
+            // four size bytes
+            size_t size = (p.second.size() * 2) + 3;
+            if (size <= 255)
+            {
+                biob << byte(0x00)<< byte(0x00)<< byte(0x00);
+                biob << static_cast<byte>(size);
+            }
+            else if (size <= 65535)
+            {
+                biob << byte(0x00)<< byte(0x00);
+                biob << static_cast<byte>(size >> 8) << byte(0xFF);
+            }
+            else 
+                throw std::out_of_range("ID3 tag too big");
+                // again, if it's that big there's something wrong
+            
+            biob << byte(0x00) << byte(0x00); // two flag bytes
+            biob << byte(0x01) << byte(0xFF) << byte(0xFE); // UTF-16LE
+            for (const auto& ch : p.second.toStdString())
+            {
+                biob << ch;
+                biob << byte(0x00);
+            }    
+        }
+        
+        auto size_difference = id3_orig - tagsum;
+        for (int i = 0; i != size_difference; ++i)
+            biob << byte(0x00);
+        biob.seekp(128, std::ios_base::end);
+        for (int i = 0; i != 127; ++i)
+            biob << byte(0x00);
+        biob << byte(0xFF);
+        return true;
+    }
+    else
+    {
+        // binary out bucket -- bob
+        std::ofstream bob(outrel, std::ios_base::binary);
+        
+        bob << 'I' << 'D' << '3' << byte(0x03) << byte(0x00)
+            << byte(0x00); // "ID3" and version bytes (ID3v2.3.0)
+        // add up all the sizes of the tags and pass result to get_id3_size
+    
+        auto sizebytes = get_id3_size(tagsum);
+        for (const auto& ch : sizebytes)
+            bob << ch;
+        for (const auto& p : QTags)
+        {
+            for (const auto& ch : p.first.toStdString())
+                bob << ch;
+            
+            // four size bytes
+            size_t size = (p.second.size() * 2) + 3;
+            if (size <= 255)
+            {
+                bob << byte(0x00)<< byte(0x00)<< byte(0x00);
+                bob << static_cast<byte>(size);
+            }
+            else if (size <= 65535)
+            {
+                bob << byte(0x00)<< byte(0x00);
+                bob << static_cast<byte>(size >> 8) << byte(0xFF);
+            }
+            else 
+                throw std::out_of_range("ID3 tag too big");
+                // again, if it's that big there's something wrong
+            
+            bob << byte(0x00) << byte(0x00); // two flag bytes
+            bob << byte(0x01) << byte(0xFF) << byte(0xFE); // UTF-16LE
+            for (const auto& ch : p.second.toStdString())
+            {
+                bob << ch;
+                bob << byte(0x00);
+            }    
+        }
 
-    for (int i = 0; i != 127; ++i)
-        bob << byte(0x00);
-    bob << byte(0xFF);
-    return true;
+        std::ostream_iterator<byte> bob_it(bob);
+        
+        std::ifstream mediafile{ filename.toStdString(), 
+                                 std::ios_base::binary };
+        noskipws(mediafile);
+        std::istream_iterator<byte> infile{mediafile};
+        std::advance(infile, id3_orig+10);
+        std::copy_n(infile, remaining_filesize, bob_it);
+    
+        for (int i = 0; i != 127; ++i)
+            bob << byte(0x00);
+        bob << byte(0xFF);
+        return true;
+    }
 }
