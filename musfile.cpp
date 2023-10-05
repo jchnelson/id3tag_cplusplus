@@ -166,7 +166,7 @@ bool MusFile::write_qtags()
     string outrel = filedir + "\\" + outname;
     fs::create_directories(filedir);
     
-    if (id3_orig >= tagsum)
+    if (id3_orig >= tagsum)  // overwrite id3 header, maintain size
     {
         fs::copy(mp3path, outrel);
         std::fstream biob(outrel, std::ios_base::binary
@@ -212,7 +212,7 @@ bool MusFile::write_qtags()
         biob << byte(0xFF);
         return true;
     }
-    else
+    else  // not enough space for new ID3 header, rewrite entire file
     {
         // binary out bucket -- bob
         std::ofstream bob(outrel, std::ios_base::binary);

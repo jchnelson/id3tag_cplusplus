@@ -19,6 +19,7 @@
 #include <QFileDialog>
 
 #include "musfile.h"
+#include "flacfile.h"
 
 namespace fs = std::filesystem;
 extern std::map<QString, QString> standard_qtags;
@@ -75,12 +76,8 @@ void save_write_folder(std::vector<MusFile>& musfolder,
 
 void do_folder(QWidget* central)
 {
-    // implement tag editing for a folder of mp3s...  
-    //  -- identify tags that are the same across all files --done
-    //  -- create sequence that holds these tags and iterate through
-    //  it to create interface to allow editing them
-    //  -- allow add/remove of tags
-    //  -- write tags to files when clicked()
+    //  TODO -- allow add/remove of tags 
+ 
     
     std::vector<MusFile> musfolder;
     QString opendir = QFileDialog::getExistingDirectory(0,
@@ -167,6 +164,9 @@ void do_single_file(QWidget* central)
 
 int main(int argc, char *argv[])
 {
+    FlacFile bob("C:\\Users\\Jakob\\Music\\Jork - Superannuated\\Jork - Superannuated - 01 Fusion, part 2.flac");
+    qInfo() << "test";
+    /*
     QApplication a(argc, argv);
     QMainWindow w;
     w.setWindowTitle("Simple ID3 Tag Editor");
@@ -186,4 +186,5 @@ int main(int argc, char *argv[])
 
     w.show();
     return a.exec();
+    */
 }
