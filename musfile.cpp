@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <QDebug>
 #include <QString>
+#include <QMessageBox>
+#include <QApplication>
 #include "musfile.h"
 
 typedef unsigned char byte;
@@ -268,4 +270,55 @@ bool MusFile::write_qtags()
         bob << byte(0xFF);
         return true;
     }
+}
+
+
+
+void MusFile::save_write_tags(std::map<QString, QLineEdit*>& lines)
+{
+    // extract text from each QLineEdit and save to qtags
+    for (const auto& line : lines)
+    {  
+        if (!line.second->text().isEmpty())
+            QTags.at(line.first) = line.second->text();
+    }
+
+    bool success = write_qtags();
+    QMessageBox msgBox;
+    if (success)
+        msgBox.setText("Tags written successfully");
+    else
+        msgBox.setText("Operation Failed");
+    msgBox.exec();
+}
+
+void MusFile::save_write_folder(std::vector<AudioFile*>& musfolder, 
+                       std::map<QString, QLineEdit*>& lines,
+                       std::map<QString, QString>& commontags,
+                       QProgressBar* progbar)
+{
+    // extract text from each QLineEdit and save to qtags
+    for (const auto& line : lines)
+    {  
+        if (!line.second->text().isEmpty())
+            commontags.at(line.first) = line.second->text();
+    }
+    for (AudioFile* mus : musfolder)
+        for (auto& tag : commontags)
+            mus->get_qtags().at(tag.first) = tag.second;
+    
+    bool success = all_of(musfolder.begin(), musfolder.end(),
+                          [&musfolder, progbar] (AudioFile* mp3) 
+                           {    progbar->setValue(progbar->value() + 1);
+                                QApplication::processEvents();
+                                return mp3->write_qtags(); } );
+    QMessageBox msgBox;
+    if (success)
+    {
+        progbar->setValue(progbar->maximum());
+        msgBox.setText("Tags written successfully");
+    }
+    else
+        msgBox.setText("Operation Failed");
+    msgBox.exec();
 }

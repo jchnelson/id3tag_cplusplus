@@ -1,4 +1,3 @@
-#include "flacfile.h"
 #include <vector>
 #include <deque>
 #include <map>
@@ -10,6 +9,7 @@
 #include <QDebug>
 #include <QString>
 #include <string>
+#include "flacfile.h"
 
 
 using std::vector; 
@@ -24,7 +24,7 @@ int get_4le_advance(std::vector<byte>::iterator& it)
 
 std::map<byte, vector<byte>> FlacFile::make_blocks()
 {
-    std::ifstream mediafile(filename, std::ios_base::binary);
+    std::ifstream mediafile(filename.toStdString(), std::ios_base::binary);
     noskipws(mediafile);
     std::istream_iterator<byte> infile(mediafile);
     header.reserve(42);
@@ -51,13 +51,13 @@ std::map<byte, vector<byte>> FlacFile::make_blocks()
             break;
     }
     full_headersize = mediafile.tellg();
-    auto fsize = fs::file_size(fs::path(filename));
+    auto fsize = fs::file_size(fs::path(filename.toStdString()));
     remaining_filesize = fsize - full_headersize;
     return metablocks; 
     
 }
 
-std::vector<QString> FlacFile::make_vcomments()
+std::map<QString, QString> FlacFile::make_vcomments()
 {
     auto comment_block = metablocks.at(4);
     
@@ -69,14 +69,20 @@ std::vector<QString> FlacFile::make_vcomments()
            std::back_inserter(vcomment_vendorstring));
     
     // create vector with vorbis comments
-    vector<QString> ret;
+    std::map<QString, QString> ret;
     auto comment_pos = comment_block.begin() + vendor_length; 
     int expected_comments = get_4le_advance(comment_pos);
     while (comment_pos != comment_block.end())
     {
         int comment_length = get_4le_advance(comment_pos);
         std::string comment(comment_pos, comment_pos + comment_length);
-        ret.emplace_back(QString::fromStdString(comment));
+        QString qcomment = QString::fromStdString(comment);
+        size_t eq = comment.find("=", 0);
+        QString first = qcomment.chopped(eq-1);
+        size_t to_end = comment.size() - (eq);
+        QString last = qcomment.sliced(eq, to_end);
+        ret.insert({first,last});
+        qInfo() << first << last;
         comment_pos += comment_length;
     }
     qInfo() << expected_comments << "comments expected, actual number was" << ret.size();
@@ -87,4 +93,16 @@ std::vector<QString> FlacFile::make_vcomments()
 bool FlacFile::write_qtags()
 {
     return true;
+}
+
+void FlacFile::save_write_tags(std::map<QString, QLineEdit*>& lines)
+{
+    
+}
+void FlacFile::save_write_folder(std::vector<AudioFile*>&, 
+                       std::map<QString, QLineEdit*>&,
+                       std::map<QString, QString>&,
+                       QProgressBar*)
+{
+    
 }

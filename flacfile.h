@@ -4,34 +4,35 @@
 #include <vector>
 #include <string>
 #include <map>
-
 #include <QString>
-
+#include "audiofile.h"
 
 typedef unsigned char byte;
 
-
-// starting reading at byte 42, copy first 42 bytes into preserved header
-// 
-
-class FlacFile
+class FlacFile : public AudioFile
 {
 public:
-    explicit FlacFile(const std::string& s)
-        : filename(s) { }
-    bool write_qtags();
+    explicit FlacFile(const QString& qs)
+        : AudioFile(), filename(qs) { }
+    std::map<QString, QString>& get_qtags() { return QTags; }
 private:
-    std::string filename;
+    QString filename;
     std::vector<byte> header;
     uintmax_t remaining_filesize;
     size_t full_headersize;
     std::map<byte, std::vector<byte>> make_blocks();
     std::map<byte, std::vector<byte>> metablocks = make_blocks();
-    std::vector<QString> make_vcomments();
+    std::map<QString, QString> make_vcomments();
 
     
 public:
-    std::vector<QString> vcomments = make_vcomments();
+    std::map<QString, QString> QTags = make_vcomments();
+    bool write_qtags();
+    void save_write_tags(std::map<QString, QLineEdit*>& lines);
+    void save_write_folder(std::vector<AudioFile*>&, 
+                           std::map<QString, QLineEdit*>&,
+                           std::map<QString, QString>&,
+                           QProgressBar*);
     
 };
 

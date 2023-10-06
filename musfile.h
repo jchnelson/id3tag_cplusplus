@@ -11,17 +11,21 @@
 #include <cstddef>
 #include <map>
 #include <QString>
+#include <QLineEdit>
+#include <QProgressBar>
+
+#include "audiofile.h"
 
 
-
-class MusFile
+class MusFile : public AudioFile
 {
 public:
     typedef unsigned char byte;
     explicit MusFile(const QString& s)
-        : filename(s) { }
+        : AudioFile(), filename(s) { }
     const std::vector<std::vector<byte>> 
          show_bintags() const { return bintags; }
+    std::map<QString, QString>& get_qtags() { return QTags; }
 
 private:
     QString filename;
@@ -38,6 +42,11 @@ private:
 public:  
     std::map<QString, QString> QTags = make_qtags();
     bool write_qtags();
+    void save_write_tags(std::map<QString, QLineEdit*>& lines);
+    void save_write_folder(std::vector<AudioFile*>& musfolder, 
+                           std::map<QString, QLineEdit*>& lines,
+                           std::map<QString, QString>& commontags,
+                           QProgressBar* progbar);
     
 };
 

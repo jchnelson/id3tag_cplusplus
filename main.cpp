@@ -4,6 +4,8 @@
 #include <map>
 #include <filesystem>
 #include <algorithm>
+#include <memory>
+#include <type_traits>
 
 #include <QApplication>
 #include <QFormLayout>
@@ -24,87 +26,53 @@
 namespace fs = std::filesystem;
 extern std::map<QString, QString> standard_qtags;
 
-void save_write_tags(MusFile& mp3, 
-                     std::map<QString, QLineEdit*>& lines)
-{
-    // extract text from each QLineEdit and save to qtags
-    for (const auto& line : lines)
-    {  
-        if (!line.second->text().isEmpty())
-            mp3.QTags.at(line.first) = line.second->text();
-    }
 
-    bool success = mp3.write_qtags();
-    QMessageBox msgBox;
-    if (success)
-        msgBox.setText("Tags written successfully");
-    else
-        msgBox.setText("Operation Failed");
-    msgBox.exec();
-}
 
-void save_write_folder(std::vector<MusFile>& musfolder, 
-                       std::map<QString, QLineEdit*>& lines,
-                       std::map<QString, QString>& commontags,
-                       QProgressBar* progbar)
-{
-    // extract text from each QLineEdit and save to qtags
-    for (const auto& line : lines)
-    {  
-        if (!line.second->text().isEmpty())
-            commontags.at(line.first) = line.second->text();
-    }
-    for (MusFile& mus : musfolder)
-        for (auto& tag : commontags)
-            mus.QTags.at(tag.first) = tag.second;
-    
-    bool success = all_of(musfolder.begin(), musfolder.end(),
-                          [&musfolder, progbar] (MusFile& mp3) 
-                           {    progbar->setValue(progbar->value() + 1);
-                                QApplication::processEvents();
-                                return mp3.write_qtags(); } );
-    QMessageBox msgBox;
-    if (success)
-    {
-        progbar->setValue(progbar->maximum());
-        msgBox.setText("Tags written successfully");
-    }
-    else
-        msgBox.setText("Operation Failed");
-    msgBox.exec();
-}
+
 
 void do_folder(QWidget* central)
 {
     //  TODO -- allow add/remove of tags 
  
     
-    std::vector<MusFile> musfolder;
+    
     QString opendir = QFileDialog::getExistingDirectory(0,
-                     "Choose Folder of MP3s", "C:\\", QFileDialog::ShowDirsOnly);
+                     "Choose Folder of only MP3 or only FLAC", "C:\\", QFileDialog::ShowDirsOnly);
     fs::path filedir = opendir.toStdString();
     fs::directory_iterator dirit(filedir);
     
-    int current = 1;
+    bool mp3_type;
+    if (std::all_of(begin(dirit), end(dirit), [] (const fs::directory_entry& entry)
+            { return entry.path().extension().string() == ".mp3"; } ))
+        mp3_type = true;
+    else if (std::all_of(begin(dirit = fs::directory_iterator(filedir)), end(dirit), [] (const fs::directory_entry& entry)
+    { return entry.path().extension().string() == ".flac"; } ))
+        mp3_type = false;
+    else
+        throw std::runtime_error("Mixed filetypes not supported");
+    
+    std::vector<AudioFile*> audiofolder;
+    
+    dirit = fs::directory_iterator(filedir); // reinitialize iterator
     for (const auto& p : dirit)
-    {      
-        if (p.path().extension().string() == ".mp3")
-        {
-            musfolder.emplace_back(QString::fromStdString(p.path().string()));
-        }
+    {
+        if (mp3_type)
+            audiofolder.emplace_back(new MusFile(QString::fromStdString(p.path().string())));
+        else
+            audiofolder.emplace_back(new FlacFile(QString::fromStdString(p.path().string())));
     } 
-    if (musfolder.empty())
-        throw std::runtime_error("No MP3s in Directory");
+    if (audiofolder.empty())
+        throw std::runtime_error("No Files in Directory");
     
     QFormLayout* flayout = new QFormLayout(central);
     std::map<QString, QString> common_tags;
     
-    for (const auto& tag : musfolder[0].QTags)
+    for (const auto& tag : audiofolder[0]->get_qtags())
     {
-        if (std::all_of(musfolder.begin(), musfolder.end(), [&tag] 
-                (MusFile& m)
-                { if (m.QTags.count(tag.first) != 0)
-                    return m.QTags.at(tag.first) == tag.second;
+        if (std::all_of(audiofolder.begin(), audiofolder.end(), [&tag] 
+                (AudioFile* audio)
+                { if (audio->get_qtags().count(tag.first) != 0)
+                    return audio->get_qtags().at(tag.first) == tag.second;
                   else 
                     return false; } ) )
             common_tags.insert(tag);
@@ -118,21 +86,22 @@ void do_folder(QWidget* central)
         line->setPlaceholderText(qs.second);
         line->setObjectName(qs.first);
         lines.insert({qs.first, line});
+        // following line needs to change
         flayout->addRow(new QLabel(standard_qtags.at(qs.first)),
                         line);
     }
-    QPushButton* goButton = new QPushButton("Save ID3 tags");
+    QPushButton* goButton = new QPushButton("Save tags");
     flayout->addRow(goButton);
     
     QProgressBar* folderprog = new QProgressBar();
-    folderprog->setMaximum(static_cast<int>(musfolder.size()));
+    folderprog->setMaximum(static_cast<int>(audiofolder.size()));
     folderprog->setMinimum(0);
     
     
     QObject::connect(goButton, &QPushButton::clicked, 
-                     [musfolder, lines, common_tags, flayout, folderprog] () mutable 
+                     [audiofolder, lines, common_tags, flayout, folderprog] () mutable 
                      { flayout->addRow(folderprog);
-                       save_write_folder(musfolder, lines, common_tags, folderprog); } );   
+                       audiofolder[0]->save_write_folder(audiofolder, lines, common_tags, folderprog); } );   
 }
 
 
@@ -140,12 +109,23 @@ void do_single_file(QWidget* central)
 {
     std::map<QString, QLineEdit*> lines;
     QString filename = QFileDialog::getOpenFileName(0,
-        "Open MP3 File", "C:\\", "MP3 Files (*.mp3)");
-    MusFile mp3(filename);
+        "Open Audio file", "C:\\", "MP3 Files (*.mp3), FLAC Files (*.flac)");
+    
+    AudioFile* audiofile;
+    if (fs::path(filename.toStdString()).filename().extension() == ".mp3") 
+        audiofile = new MusFile(filename);
+    else
+        audiofile = new FlacFile(filename);
+    /*
+    if (fs::path(filename.toStdString()).filename().extension() == ".mp3")
+        MusFile audiofile(filename);
+    else
+        FlacFile audiofile(filename);
+        */
     
     QFormLayout* flayout = new QFormLayout(central);
     
-    for (const auto& qs : mp3.QTags)
+    for (const auto& qs : audiofile->get_qtags())
     {
         QLineEdit* line = new QLineEdit();
         line->setPlaceholderText(qs.second);
@@ -158,7 +138,8 @@ void do_single_file(QWidget* central)
     flayout->addRow(goButton);
     
     QObject::connect(goButton, &QPushButton::clicked, 
-                     [mp3, lines] () mutable { save_write_tags(mp3, lines); } );   
+                     [audiofile, lines] () mutable 
+                     { audiofile->save_write_tags(lines); } );   
 }
 
 
