@@ -116,12 +116,6 @@ void do_single_file(QWidget* central)
         audiofile = new MusFile(filename);
     else
         audiofile = new FlacFile(filename);
-    /*
-    if (fs::path(filename.toStdString()).filename().extension() == ".mp3")
-        MusFile audiofile(filename);
-    else
-        FlacFile audiofile(filename);
-        */
     
     QFormLayout* flayout = new QFormLayout(central);
     
@@ -139,7 +133,8 @@ void do_single_file(QWidget* central)
     
     QObject::connect(goButton, &QPushButton::clicked, 
                      [audiofile, lines] () mutable 
-                     { audiofile->save_write_tags(lines); } );   
+                     { audiofile->save_write_tags(lines);
+                                    delete audiofile; } );   
 }
 
 

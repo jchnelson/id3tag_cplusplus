@@ -78,11 +78,9 @@ std::map<QString, QString> FlacFile::make_vcomments()
         std::string comment(comment_pos, comment_pos + comment_length);
         QString qcomment = QString::fromStdString(comment);
         size_t eq = comment.find("=", 0);
-        QString first = qcomment.chopped(eq-1);
-        size_t to_end = comment.size() - (eq);
-        QString last = qcomment.sliced(eq, to_end);
+        QString first = qcomment.sliced(0,eq); // text before
+        QString last = qcomment.sliced(eq+1);  // and after '='
         ret.insert({first,last});
-        qInfo() << first << last;
         comment_pos += comment_length;
     }
     qInfo() << expected_comments << "comments expected, actual number was" << ret.size();
