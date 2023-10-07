@@ -15,6 +15,7 @@
 #include <QProgressBar>
 
 #include "audiofile.h"
+extern std::map<QString, QString> standard_qtags;
 
 
 class MusFile : public AudioFile
@@ -26,6 +27,7 @@ public:
     const std::vector<std::vector<byte>> 
          show_bintags() const { return bintags; }
     std::map<QString, QString>& get_qtags() { return QTags; }
+    std::map<QString, QString> get_standard() { return standard_qtags; }
 
 private:
     QString filename;
@@ -42,12 +44,6 @@ private:
 public:  
     std::map<QString, QString> QTags = make_qtags();
     bool write_qtags();
-    void save_write_tags(std::map<QString, QLineEdit*>& lines);
-    void save_write_folder(std::vector<AudioFile*>& musfolder, 
-                           std::map<QString, QLineEdit*>& lines,
-                           std::map<QString, QString>& commontags,
-                           QProgressBar* progbar);
-    
 };
 
 std::ostream& print_vecbyte(std::ostream& os, std::vector<MusFile::byte> vb);

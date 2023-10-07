@@ -9,14 +9,10 @@
 class AudioFile
 {
 public:
-    AudioFile();
+    AudioFile() = default;
     virtual std::map<QString, QString>& get_qtags() = 0;
+    virtual std::map<QString, QString> get_standard() = 0;
     virtual bool write_qtags() = 0;
-    virtual void save_write_tags(std::map<QString, QLineEdit*>& lines) = 0;
-    virtual void save_write_folder(std::vector<AudioFile*>&, 
-                           std::map<QString, QLineEdit*>&,
-                           std::map<QString, QString>&,
-                           QProgressBar*) = 0;
     virtual ~AudioFile() = default;
 };
 

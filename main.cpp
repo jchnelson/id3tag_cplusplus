@@ -1,11 +1,8 @@
 #include <string>
 #include <vector>
-#include <sstream>
 #include <map>
 #include <filesystem>
 #include <algorithm>
-#include <memory>
-#include <type_traits>
 
 #include <QApplication>
 #include <QFormLayout>
@@ -24,10 +21,58 @@
 #include "flacfile.h"
 
 namespace fs = std::filesystem;
-extern std::map<QString, QString> standard_qtags;
 
+void save_write_tags(AudioFile* audio, std::map<QString, QLineEdit*>& lines)
+{
+    // extract text from each QLineEdit and save to qtags
+    for (const auto& line : lines)
+    {  
+        if (!line.second->text().isEmpty())
+            audio->get_qtags().at(line.first) = line.second->text();
+    }
 
+    bool success = audio->write_qtags();
+    QMessageBox msgBox;
+    if (success)
+        msgBox.setText("Tags written successfully");
+    else
+        msgBox.setText("Operation Failed");
+    msgBox.exec();
+}
 
+void save_write_folder(std::vector<AudioFile*>& audiofolder, 
+                       std::map<QString, QLineEdit*>& lines,
+                       std::map<QString, QString>& commontags,
+                       QProgressBar* progbar)
+{
+    // extract text from each QLineEdit and save to qtags
+    for (const auto& line : lines)
+    {  
+        if (!line.second->text().isEmpty())
+            commontags.at(line.first) = line.second->text();
+    }
+    for (AudioFile* audio : audiofolder)
+        for (auto& tag : commontags)
+            audio->get_qtags().at(tag.first) = tag.second;
+    
+    bool success = all_of(audiofolder.begin(), audiofolder.end(),
+                          [&audiofolder, progbar] (AudioFile* audio) 
+                           {    progbar->setValue(progbar->value() + 1);
+                                QApplication::processEvents();
+                                return audio->write_qtags(); } );
+    for (auto audio: audiofolder)
+        delete audio;
+    
+    QMessageBox msgBox;
+    if (success)
+    {
+        progbar->setValue(progbar->maximum());
+        msgBox.setText("Tags written successfully");
+    }
+    else
+        msgBox.setText("Operation Failed");
+    msgBox.exec();
+}
 
 
 void do_folder(QWidget* central)
@@ -45,7 +90,7 @@ void do_folder(QWidget* central)
     if (std::all_of(begin(dirit), end(dirit), [] (const fs::directory_entry& entry)
             { return entry.path().extension().string() == ".mp3"; } ))
         mp3_type = true;
-    else if (std::all_of(begin(dirit = fs::directory_iterator(filedir)), end(dirit), [] (const fs::directory_entry& entry)
+    else if (std::all_of(begin(dirit), end(dirit), [] (const fs::directory_entry& entry)
     { return entry.path().extension().string() == ".flac"; } ))
         mp3_type = false;
     else
@@ -86,9 +131,11 @@ void do_folder(QWidget* central)
         line->setPlaceholderText(qs.second);
         line->setObjectName(qs.first);
         lines.insert({qs.first, line});
-        // following line needs to change
+        
+
         flayout->addRow(new QLabel(standard_qtags.at(qs.first)),
-                        line);
+                    line);
+           
     }
     QPushButton* goButton = new QPushButton("Save tags");
     flayout->addRow(goButton);
@@ -101,7 +148,7 @@ void do_folder(QWidget* central)
     QObject::connect(goButton, &QPushButton::clicked, 
                      [audiofolder, lines, common_tags, flayout, folderprog] () mutable 
                      { flayout->addRow(folderprog);
-                       audiofolder[0]->save_write_folder(audiofolder, lines, common_tags, folderprog); } );   
+                       save_write_folder(audiofolder, lines, common_tags, folderprog); } );   
 }
 
 
@@ -109,7 +156,7 @@ void do_single_file(QWidget* central)
 {
     std::map<QString, QLineEdit*> lines;
     QString filename = QFileDialog::getOpenFileName(0,
-        "Open Audio file", "C:\\", "MP3 Files (*.mp3), FLAC Files (*.flac)");
+        "Open Audio file", "C:\\", "MP3 or FLAC Files (*.mp3 *.flac)");
     
     AudioFile* audiofile;
     if (fs::path(filename.toStdString()).filename().extension() == ".mp3") 
@@ -125,7 +172,7 @@ void do_single_file(QWidget* central)
         line->setPlaceholderText(qs.second);
         line->setObjectName(qs.first);
         lines.insert({qs.first, line});
-        flayout->addRow(new QLabel(standard_qtags.at(qs.first)),
+        flayout->addRow(new QLabel(audiofile->get_standard().at(qs.first)),
                         line);
     }
     QPushButton* goButton = new QPushButton("Save ID3 tags");
@@ -133,16 +180,13 @@ void do_single_file(QWidget* central)
     
     QObject::connect(goButton, &QPushButton::clicked, 
                      [audiofile, lines] () mutable 
-                     { audiofile->save_write_tags(lines);
-                                    delete audiofile; } );   
+                     { save_write_tags(audiofile, lines);
+                       delete audiofile; } );   
 }
 
 
 int main(int argc, char *argv[])
 {
-    FlacFile bob("C:\\Users\\Jakob\\Music\\Jork - Superannuated\\Jork - Superannuated - 01 Fusion, part 2.flac");
-    qInfo() << "test";
-    /*
     QApplication a(argc, argv);
     QMainWindow w;
     w.setWindowTitle("Simple ID3 Tag Editor");
@@ -151,9 +195,9 @@ int main(int argc, char *argv[])
     
     QMessageBox initBox;
     initBox.setText("Welcome, please choose to edit tags for"
-                    "\na single mp3 or a folder of them");
-    initBox.addButton("Single mp3", QMessageBox::AcceptRole);
-    initBox.addButton("Folder of Mp3s", QMessageBox::YesRole);
+                    "\na single Mp3/FLAC or a folder of all one type");
+    initBox.addButton("Single file", QMessageBox::AcceptRole);
+    initBox.addButton("Folder", QMessageBox::YesRole);
     int ret = initBox.exec();
     if (ret == 0) // accept
         do_single_file(bigboss);    
@@ -162,5 +206,4 @@ int main(int argc, char *argv[])
 
     w.show();
     return a.exec();
-    */
 }

@@ -21,7 +21,6 @@ using std::vector;
 using std::string;
 using std::map;
 namespace fs = std::filesystem;
-extern std::map<std::string, std::string> standard_tags;
 
 vector<byte> MusFile::make_filebytes()
 {
@@ -155,9 +154,9 @@ std::map<QString, QString> MusFile::make_qtags()
 bool MusFile::write_qtags()
 {
     
-    int tagsum = 0;
+    size_t tagsum = 0;
     for(const auto& p : QTags)
-        tagsum+= static_cast<int>(10 + 3 + (p.second.size() * 2));
+        tagsum+= 10 + 3 + (p.second.size() * 2);
         // tag type (4) + ( tag length * 2(zeroes) ) + 3 (BOM) + 2 (flags) 
     // add back in zeroes and encoding-type byte + order mark (2 bytes)
     
@@ -270,55 +269,4 @@ bool MusFile::write_qtags()
         bob << byte(0xFF);
         return true;
     }
-}
-
-
-
-void MusFile::save_write_tags(std::map<QString, QLineEdit*>& lines)
-{
-    // extract text from each QLineEdit and save to qtags
-    for (const auto& line : lines)
-    {  
-        if (!line.second->text().isEmpty())
-            QTags.at(line.first) = line.second->text();
-    }
-
-    bool success = write_qtags();
-    QMessageBox msgBox;
-    if (success)
-        msgBox.setText("Tags written successfully");
-    else
-        msgBox.setText("Operation Failed");
-    msgBox.exec();
-}
-
-void MusFile::save_write_folder(std::vector<AudioFile*>& musfolder, 
-                       std::map<QString, QLineEdit*>& lines,
-                       std::map<QString, QString>& commontags,
-                       QProgressBar* progbar)
-{
-    // extract text from each QLineEdit and save to qtags
-    for (const auto& line : lines)
-    {  
-        if (!line.second->text().isEmpty())
-            commontags.at(line.first) = line.second->text();
-    }
-    for (AudioFile* mus : musfolder)
-        for (auto& tag : commontags)
-            mus->get_qtags().at(tag.first) = tag.second;
-    
-    bool success = all_of(musfolder.begin(), musfolder.end(),
-                          [&musfolder, progbar] (AudioFile* mp3) 
-                           {    progbar->setValue(progbar->value() + 1);
-                                QApplication::processEvents();
-                                return mp3->write_qtags(); } );
-    QMessageBox msgBox;
-    if (success)
-    {
-        progbar->setValue(progbar->maximum());
-        msgBox.setText("Tags written successfully");
-    }
-    else
-        msgBox.setText("Operation Failed");
-    msgBox.exec();
 }
