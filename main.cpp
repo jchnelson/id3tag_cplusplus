@@ -87,24 +87,66 @@ void do_folder(QWidget* central)
     fs::directory_iterator dirit(filedir);
     
     bool mp3_type;
-    if (std::all_of(begin(dirit), end(dirit), [] (const fs::directory_entry& entry)
-            { return entry.path().extension().string() == ".mp3"; } ))
+    // allow other non-audio types, there has to be a better way to do this
+    std::vector<std::string> filetypes{".jpg", ".jpeg", ".md5", ".cue", ".nfo",
+                             ".m3u", ".bmp", ".tiff", ".log", ".txt",
+                             ".png", ".crc", ".html"};
+    if (std::all_of(begin(dirit), end(dirit), [&] (const fs::directory_entry& entry)
+            {       
+                std::string ext = entry.path().extension().string();
+                for (auto& ch : ext)
+                    ch = tolower(ch);
+                    
+                
+                    
+                if (find(filetypes.begin(), filetypes.end(), ext) != filetypes.end())
+                {  
+                    qInfo() << ext;
+                    return true;
+                }
+                else
+                    return ext == ".mp3"; 
+            } ))
         mp3_type = true;
-    else if (std::all_of(begin(dirit), end(dirit), [] (const fs::directory_entry& entry)
-    { return entry.path().extension().string() == ".flac"; } ))
+    else if (std::all_of(begin(dirit), end(dirit), [&] (const fs::directory_entry& entry)
+            {       
+                std::string ext = entry.path().extension().string();
+                for (auto& ch : ext)
+                    ch = tolower(ch);
+                
+                if (find(filetypes.begin(), filetypes.end(), ext) != filetypes.end())
+                {  
+                    qInfo() << ext;
+                    return true;
+                }
+                else
+                    return ext == ".flac"; 
+            } ))
         mp3_type = false;
     else
-        throw std::runtime_error("Mixed filetypes not supported");
+    {
+        throw std::runtime_error("Mixed audio types not supported");
+    }
     
     std::vector<AudioFile*> audiofolder;
     
     dirit = fs::directory_iterator(filedir); // reinitialize iterator
     for (const auto& p : dirit)
     {
+        std::string ext = p.path().extension().string();
+        for (auto& ch : ext)
+            ch = tolower(ch);
         if (mp3_type)
-            audiofolder.emplace_back(new MusFile(QString::fromStdString(p.path().string())));
+        {
+            if (ext == ".mp3")
+                audiofolder.emplace_back(new MusFile(QString::fromStdString(p.path().string())));
+            
+        }
         else
+        {
+            if (ext == ".flac")
             audiofolder.emplace_back(new FlacFile(QString::fromStdString(p.path().string())));
+        }
     } 
     if (audiofolder.empty())
         throw std::runtime_error("No Files in Directory");
@@ -123,6 +165,7 @@ void do_folder(QWidget* central)
             common_tags.insert(tag);
     }
     
+    
     std::map<QString, QLineEdit*> lines;
     
     for (const auto& qs : common_tags)
@@ -132,8 +175,7 @@ void do_folder(QWidget* central)
         line->setObjectName(qs.first);
         lines.insert({qs.first, line});
         
-
-        flayout->addRow(new QLabel(standard_qtags.at(qs.first)),
+        flayout->addRow(new QLabel(audiofolder[0]->get_standard().at(qs.first)),
                     line);
            
     }
@@ -189,7 +231,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     QMainWindow w;
-    w.setWindowTitle("Simple ID3 Tag Editor");
+    w.setWindowTitle("Simple ID3/Vorbis Tag Editor");
     QWidget* bigboss = new QWidget(&w);
     w.setCentralWidget(bigboss);
     

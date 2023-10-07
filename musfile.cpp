@@ -154,7 +154,7 @@ std::map<QString, QString> MusFile::make_qtags()
 bool MusFile::write_qtags()
 {
     
-    size_t tagsum = 0;
+    int tagsum = 0;
     for(const auto& p : QTags)
         tagsum+= 10 + 3 + (p.second.size() * 2);
         // tag type (4) + ( tag length * 2(zeroes) ) + 3 (BOM) + 2 (flags) 

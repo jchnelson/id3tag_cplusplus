@@ -110,7 +110,7 @@ std::map<QString, QString> vorbis_qtags =
     {"ISRC", "ISRC number"},
     {"COMPOSER", "Composer name"},
     {"ALBUM ARTIST", "Artist name"},
-    {"ALBUMARTIST", "Artist name"},
+    {"ALBUMARTIST", "Artist name"}, 
     {"DISCNUMBER", "Disc Number"},
     {"DISCTOTAL", "Total number of discs"},
     {"TOTALDISCS", "Total number of discs"},
