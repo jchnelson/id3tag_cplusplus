@@ -141,7 +141,7 @@ bool FlacFile::write_qtags()
     else // there's no room
     {
         rewrite_file = true;
-        size_difference = 2000; // insert padding for later
+        size_difference = 2000; // padding for later
     }
     
     
@@ -239,7 +239,7 @@ bool FlacFile::write_qtags()
                                   size_difference, byte(0x00));
                 }
             }
-            else  // then it's 0, or we wouldn't be in this block
+            else 
                 newpadding = metablocks.at(1);
             biob << byte(1 | 128);
             writevec(biob, make_3be(newpadding.size()));
@@ -257,9 +257,6 @@ bool FlacFile::write_qtags()
     else if (origsize < tagsum &&
             origsize + padding_size + 4 >= tagsum)
     {
-        // check if the tagsize allows for padding still
-        // if this size_difference is less than four, that's 
-        // also difficult to handle
         if (size_difference > 4)
         {
             biob << byte(0x01 | 128);

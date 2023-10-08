@@ -32,10 +32,9 @@ vector<byte> MusFile::make_filebytes()
     vector<byte> ret;
     std::copy_n(infile, 10, std::back_inserter(ret));
     ++infile;
-    // seventh byte ([6]) is always where size bytes begin, after "ID3", 
-    // two version bytes, and one flag byte.  size bytes ignore most 
-    // significant bit of each byte. this equation provided by ID3 standard to 
-    // easily calculate the size of the ID3 header from these four bytes
+    
+    // ID3 header size bytes(4) begin after "ID3", two version bytes, and 
+    // one flag byte. size bytes ignore most significant bit of each byte.
     size_t id3_length = ret[6] * pow(2, 21) + ret[7] * pow(2, 14) +
         ret[8] * pow(2, 7) + ret[9] * (1);
     std::copy_n(infile, static_cast<__int64>(id3_length), 
@@ -48,13 +47,13 @@ vector<byte> MusFile::make_filebytes()
 
 vector<byte> MusFile::get_tag()
 {
-    // get tag size from bytes 5-8, return vector of chars to end of tag
+    // get 4-byte int(BE) for tag size 
     int tagsize = int( filepos[4] << 24 | filepos[5] << 16 |
                        filepos[6] << 8  | filepos[7] );
     if (tagsize == 0)
         return vector<byte>();
     vector<byte> ret;
-    ret.reserve(tagsize+10);
+    ret.reserve(tagsize+10);  // ten bytes for tag header
     ret.assign(filepos, filepos+tagsize+10);
     return ret;
 }
@@ -76,6 +75,8 @@ vector<vector<byte>> MusFile::maketags()
             ret.push_back(next_tag);
         }
     }
+    if (ret.size() == 0)
+        throw std::runtime_error("No tags ID3v2 tags found in file");
     return ret;
 }
 
@@ -84,16 +85,15 @@ vector<vector<byte>> MusFile::maketags()
 
 
 std::vector<byte> MusFile::get_id3_size(int i)
-{  // id3 standard -- four bytes for header size, zeroed-out most significant
-    // bit for each of those bytes, treated as if that bit doesn't exist.
+{  
     if (i <= 127) // 7 places max value
         return std::vector<byte>({0,0,0,static_cast<byte>(i)});
     else if (i <= 16383) // 14 places max
     {
         auto i2 = i;
-        auto byte1 = static_cast<byte>(i2 & 127);  // & all ones for first 7 to isolate
+        auto byte1 = static_cast<byte>(i2 & 127);
         i2 = i; 
-        auto byte2 = static_cast<byte>((i2 & 16256) >> 7); // & all ones for next seven
+        auto byte2 = static_cast<byte>((i2 & 16256) >> 7); 
         return std::vector<byte>({0,0,byte2,byte1});
     }
     else if (i <= 2097151) // 21 places max
@@ -164,6 +164,17 @@ bool MusFile::write_qtags()
     auto mp3path = fs::path(filename.toStdString());
     string outname = mp3path.filename().string();
     string filedir = QTags.at("TALB").toStdString();
+    
+    // replace forbidden characters for directory with a space
+    string no_dir_chars = ">:\"/\\|?*";
+    if (filedir.find_first_of(no_dir_chars) != string::npos)
+        for (const auto& ch : no_dir_chars)
+        {   
+            auto index = filedir.find(ch);
+            if (index != string::npos)
+                filedir[index] = ' ';
+        }
+    
     string outrel = filedir + "\\" + outname;
     fs::create_directories(filedir);
     
@@ -254,19 +265,27 @@ bool MusFile::write_qtags()
                 bob << byte(0x00);
             }    
         }
-
-        std::ostream_iterator<byte> bob_it(bob);
         
         std::ifstream mediafile{ filename.toStdString(), 
                                  std::ios_base::binary };
         noskipws(mediafile);
-        std::istream_iterator<byte> infile{mediafile};
-        std::advance(infile, id3_orig+10);
-        std::copy_n(infile, remaining_filesize, bob_it);
-    
-        for (int i = 0; i != 127; ++i)
-            bob << byte(0x00);
+        mediafile.ignore(id3_orig+10); // position after original header
+        
+        std::vector<char> filebucket;
+        filebucket.reserve(remaining_filesize);
+        filebucket.assign(remaining_filesize,0);
+        
+        mediafile.read(filebucket.data(), filebucket.size());
+        bob.write(filebucket.data(), filebucket.size());
+        
+        vector<char> zeroes;
+        zeroes.reserve(127);
+        zeroes.assign(127, 0);
+        
+        bob.seekp(128, std::ios_base::end);
+        bob.write(zeroes.data(), 127);
         bob << byte(0xFF);
+
         return true;
     }
 }
